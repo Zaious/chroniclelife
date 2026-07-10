@@ -92,6 +92,15 @@
   const shellBg = $derived(`rgba(${palette.bg}, ${$settings.windowOpacity})`);
   const shellFg = $derived(`rgb(${palette.fg})`);
   const labelColorVar = $derived(`rgba(${palette.fg}, 0.92)`);
+  /**
+   * 常駐時間軸的文字直接疊在桌布上,給一層與文字色相反的細陰影,
+   * 讓黑字/白字在任何桌布底色上都看得清 (使用者回饋 §文字對比)。
+   */
+  const labelShadowVar = $derived(
+    effectiveThemeMode === 'dark'
+      ? '0 1px 2px rgba(0, 0, 0, 0.75)'
+      : '0 1px 2px rgba(255, 255, 255, 0.85)',
+  );
   const hoverBgVar = $derived(`rgba(${palette.overlay}, 0.06)`);
   const iconHoverBgVar = $derived(`rgba(${palette.overlay}, 0.16)`);
   /**
@@ -101,11 +110,14 @@
    */
   const handleBgVar = $derived(`rgba(${palette.overlay}, 0.15)`);
   const borderColorVar = $derived(`rgba(${palette.border}, 0.15)`);
-  /** 頂部管理面板:淡淡的黑色疊色即可(不覆蓋其他內容,不需高不透明度)。 */
-  const panelBgVar = `rgba(0, 0, 0, 0.2)`;
+  /**
+   * 頂部管理面板(新增/設定)一律用不透明實色底:windowOpacity 只作用於常駐時間軸,
+   * 面板必須完全可讀,不隨透明度變透 (使用者回饋 §面板不透明)。
+   */
+  const panelBgVar = $derived(`rgb(${palette.bg})`);
   const panelBorderVar = $derived(`rgba(${palette.border}, 0.08)`);
-  /** 列編輯 popover 會浮在 Timeline 列之上,需要接近不透明的實色底才夠清楚可讀。 */
-  const surfaceBgVar = $derived(`rgba(${palette.bg}, 0.97)`);
+  /** 列編輯 popover 浮在 Timeline 之上,用不透明實色底才清楚可讀。 */
+  const surfaceBgVar = $derived(`rgb(${palette.bg})`);
 
   function togglePinned(): void {
     updateSettings({ alwaysOnTop: !$settings.alwaysOnTop });
@@ -144,6 +156,7 @@
   style:--panel-border={panelBorderVar}
   style:--surface-bg={surfaceBgVar}
   style:--handle-bg={handleBgVar}
+  style:--label-shadow={labelShadowVar}
 >
   <div class="handle" data-tauri-drag-region>
     <span class="title">ChronicleLife</span>
@@ -300,5 +313,6 @@
   .body {
     flex: 1 1 auto;
     min-height: 0;
+    text-shadow: var(--label-shadow, none);
   }
 </style>
