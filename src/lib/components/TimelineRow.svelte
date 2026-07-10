@@ -179,7 +179,7 @@
   onkeydown={handleRowKeydown}
 >
   {#if edgeLabelBeforeTrack}
-    <span class="label" style:color={labelColor}>{labelText}</span>
+    <span class="label" style:color={labelColor}><span class="label-text">{labelText}</span></span>
   {/if}
 
   <div
@@ -213,12 +213,12 @@
         class="label label-tail"
         style="{anchorSide}: {barWidthPx}px;"
         style:color={labelColor}
-      >{labelText}</span>
+      ><span class="label-text">{labelText}</span></span>
     {/if}
   </div>
 
   {#if edgeLabelAfterTrack}
-    <span class="label" style:color={labelColor}>{labelText}</span>
+    <span class="label" style:color={labelColor}><span class="label-text">{labelText}</span></span>
   {/if}
 </div>
 
@@ -276,6 +276,18 @@
   .label {
     white-space: nowrap;
     padding: 0 6px;
+  }
+
+  /**
+   * 標籤文字自帶底色小色塊:視窗透明時文字直接疊在桌布/網頁上,
+   * 給文字一塊主題底色墊底,不論背後是白網頁或深色桌布都清楚可讀 (使用者回饋)。
+   * 底色不隨 windowOpacity 變透(--label-bg 由 +page 以固定 alpha 提供)。
+   */
+  .label-text {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--label-bg, rgba(20, 20, 24, 0.8));
   }
 
   .label-tail {

@@ -93,6 +93,11 @@
   const shellFg = $derived(`rgb(${palette.fg})`);
   const labelColorVar = $derived(`rgba(${palette.fg}, 0.92)`);
   /**
+   * 標籤文字色塊底色:固定 0.8 alpha(不隨 windowOpacity 變透),讓每條中文標籤
+   * 都有自己的可讀底色,無論視窗背後是白網頁或深色桌布 (使用者回饋)。
+   */
+  const labelBgVar = $derived(`rgba(${palette.bg}, 0.8)`);
+  /**
    * 常駐時間軸的文字直接疊在桌布上,給一層與文字色相反的細陰影,
    * 讓黑字/白字在任何桌布底色上都看得清 (使用者回饋 §文字對比)。
    */
@@ -157,6 +162,7 @@
   style:--surface-bg={surfaceBgVar}
   style:--handle-bg={handleBgVar}
   style:--label-shadow={labelShadowVar}
+  style:--label-bg={labelBgVar}
 >
   <div class="handle" data-tauri-drag-region>
     <span class="title">ChronicleLife</span>
