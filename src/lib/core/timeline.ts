@@ -21,7 +21,10 @@ export type CheckpointState = 'upcoming' | 'due' | 'acked';
  * 已逾期 (deadline < now) 回傳 0。
  */
 export function barRatio(deadlineMs: number, nowMs: number, windowDays: number): number {
-  throw new Error('TODO(M1)');
+  const remaining = deadlineMs - nowMs;
+  const windowMs = windowDays * MS_PER_DAY;
+  const ratio = remaining / windowMs;
+  return Math.min(1, Math.max(0, ratio));
 }
 
 /**
@@ -35,7 +38,10 @@ export function checkpointOffsetRatio(
   checkpointMs: number,
   windowDays: number,
 ): number | null {
-  throw new Error('TODO(M1)');
+  const windowMs = windowDays * MS_PER_DAY;
+  const offset = (deadlineMs - checkpointMs) / windowMs;
+  if (offset < 0 || offset > 1) return null;
+  return offset;
 }
 
 /**
@@ -45,7 +51,11 @@ export function checkpointOffsetRatio(
  * - 其餘                      → 'normal'
  */
 export function rowMode(deadlineMs: number, nowMs: number, thresholdHours: number): RowMode {
-  throw new Error('TODO(M1)');
+  if (deadlineMs < nowMs) return 'overdue';
+  const remaining = deadlineMs - nowMs;
+  const thresholdMs = thresholdHours * 3_600_000;
+  if (remaining <= thresholdMs) return 'countdown';
+  return 'normal';
 }
 
 /**
@@ -53,14 +63,22 @@ export function rowMode(deadlineMs: number, nowMs: number, thresholdHours: numbe
  * msRemaining ≤ 0 回傳 "00:00:00"。
  */
 export function formatCountdown(msRemaining: number): string {
-  throw new Error('TODO(M1)');
+  if (msRemaining <= 0) return '00:00:00';
+  const totalSeconds = Math.floor(msRemaining / 1000);
+  const hh = Math.floor(totalSeconds / 3600);
+  const mm = Math.floor((totalSeconds % 3600) / 60);
+  const ss = totalSeconds % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
 }
 
 /**
  * 逾期天數(無條件進位:逾期 1 小時 = 1 天),用於「已逾期 N 天」。
  */
 export function overdueDays(deadlineMs: number, nowMs: number): number {
-  throw new Error('TODO(M1)');
+  const overdueMs = nowMs - deadlineMs;
+  if (overdueMs <= 0) return 0;
+  return Math.ceil(overdueMs / MS_PER_DAY);
 }
 
 /**
@@ -71,15 +89,46 @@ export function overdueDays(deadlineMs: number, nowMs: number): number {
  * 回傳新陣列,不改動輸入。
  */
 export function sortTasksForDisplay(tasks: Task[], nowMs: number): Task[] {
-  throw new Error('TODO(M1)');
+  const active = tasks.filter((t) => !t.done);
+
+  const upcoming: Task[] = [];
+  const overdue: Task[] = [];
+  for (const t of active) {
+    const deadlineMs = isoToMs(t.deadline);
+    if (deadlineMs < nowMs) {
+      overdue.push(t);
+    } else {
+      upcoming.push(t);
+    }
+  }
+
+  // 未逾期:剩餘時間 多 → 少(最緊急沉到最底)
+  upcoming.sort((a, b) => isoToMs(b.deadline) - isoToMs(a.deadline));
+  // 逾期:逾期久(deadline 較早) → 新(deadline 較晚)
+  overdue.sort((a, b) => isoToMs(a.deadline) - isoToMs(b.deadline));
+
+  return [...upcoming, ...overdue];
 }
 
 /** 檢查點狀態判定:acked → 'acked';at ≤ now → 'due';否則 'upcoming'。 */
 export function checkpointState(cp: Checkpoint, nowMs: number): CheckpointState {
-  throw new Error('TODO(M1)');
+  if (cp.acked) return 'acked';
+  const atMs = isoToMs(cp.at);
+  if (atMs <= nowMs) return 'due';
+  return 'upcoming';
 }
+
+/** 嚴格 ISO 8601 格式(含時區 Z 或 ±HH:MM),拒絕如 "YYYY/MM/DD" 等非 ISO 寫法。 */
+const ISO_8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/;
 
 /** ISO 8601 字串 → epoch ms。無效輸入丟 Error(資料層應在寫入前就擋掉)。 */
 export function isoToMs(iso: string): number {
-  throw new Error('TODO(M1)');
+  if (typeof iso !== 'string' || !ISO_8601_RE.test(iso)) {
+    throw new Error(`isoToMs: invalid ISO 8601 string: ${JSON.stringify(iso)}`);
+  }
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) {
+    throw new Error(`isoToMs: invalid ISO 8601 string: ${JSON.stringify(iso)}`);
+  }
+  return ms;
 }
