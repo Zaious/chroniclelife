@@ -5,6 +5,7 @@
    * 刪除分類時,該分類底下任務的 categoryId 由 store 端(removeCategory)設為 null(PLANNING.md §3.1 F2)。
    */
   import { categories, addCategory, updateCategory, removeCategory } from '../stores/app';
+  import ColorPicker from './ColorPicker.svelte';
 
   const DEFAULT_COLOR = '#4F8EF7';
 
@@ -25,11 +26,6 @@
     updateCategory(id, { name: value });
   }
 
-  function handleColorChange(id: string, event: Event): void {
-    const value = (event.currentTarget as HTMLInputElement).value;
-    updateCategory(id, { color: value });
-  }
-
   function handleRemove(id: string): void {
     removeCategory(id);
   }
@@ -41,12 +37,10 @@
   <ul class="category-list">
     {#each $categories as c (c.id)}
       <li>
-        <input
-          class="color-input"
-          type="color"
+        <ColorPicker
           value={c.color}
-          onchange={(e) => handleColorChange(c.id, e)}
-          aria-label="分類顏色"
+          onchange={(hex) => updateCategory(c.id, { color: hex })}
+          ariaLabel="分類顏色"
         />
         <input
           class="name-input"
@@ -63,7 +57,7 @@
   </ul>
 
   <form class="add-form" onsubmit={handleAdd}>
-    <input class="color-input" type="color" bind:value={newColor} aria-label="新分類顏色" />
+    <ColorPicker value={newColor} onchange={(hex) => (newColor = hex)} ariaLabel="新分類顏色" />
     <input class="name-input" type="text" placeholder="新分類名稱" bind:value={newName} required />
     <button type="submit">新增分類</button>
   </form>
@@ -102,15 +96,6 @@
   .name-input {
     flex: 1 1 140px;
     min-width: 0;
-  }
-
-  .color-input {
-    width: 2rem;
-    height: 1.75rem;
-    padding: 0;
-    border: none;
-    background: none;
-    cursor: pointer;
   }
 
   input,
