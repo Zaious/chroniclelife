@@ -18,9 +18,17 @@ fn resolve_data_path(app: &AppHandle, file_name: &str) -> Result<PathBuf, String
     Ok(dir.join(file_name))
 }
 
-/// Reads a file's contents as a UTF-8 string. Returns `None` if the file does not exist.
-fn read_file_contents(path: &PathBuf) -> Option<String> {
-    fs::read_to_string(path).ok()
+/// Reads a file's contents as a UTF-8 string.
+/// - File missing → `Ok(None)` (this is the normal "first run" case).
+/// - File present but unreadable (locked/permissions/other IO error) → `Err(message)`.
+///   This must NOT be collapsed into `None`: the frontend treats `None` as "no file yet"
+///   and would otherwise overwrite real data with defaults on the next save.
+fn read_file_contents(path: &PathBuf) -> Result<Option<String>, String> {
+    match fs::read_to_string(path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("讀取 {} 失敗: {e}", path.display())),
+    }
 }
 
 /// Writes `contents` to `path` atomically: writes to a sibling `.tmp` file first,
@@ -43,8 +51,8 @@ fn write_file_atomic(path: &PathBuf, contents: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn load_data(app: AppHandle) -> Option<String> {
-    let path = resolve_data_path(&app, DATA_FILE_NAME).ok()?;
+fn load_data(app: AppHandle) -> Result<Option<String>, String> {
+    let path = resolve_data_path(&app, DATA_FILE_NAME)?;
     read_file_contents(&path)
 }
 
@@ -55,8 +63,8 @@ fn save_data(app: AppHandle, json: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn load_settings(app: AppHandle) -> Option<String> {
-    let path = resolve_data_path(&app, SETTINGS_FILE_NAME).ok()?;
+fn load_settings(app: AppHandle) -> Result<Option<String>, String> {
+    let path = resolve_data_path(&app, SETTINGS_FILE_NAME)?;
     read_file_contents(&path)
 }
 
@@ -83,6 +91,10 @@ fn toggle_main_window(app: &AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             load_data,
             save_data,
@@ -119,4 +131,59 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Verifies the exact `read_file_contents` contract this task hardened (missing file → `Ok(None)`;
+/// readable file → `Ok(Some(_))`; unreadable path → `Err(_)`, never silently collapsed to `None`).
+/// A directory path is used to force a real (non-`NotFound`) IO error deterministically and
+/// cross-platform, without relying on OS-specific permission APIs.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_file_is_ok_none() {
+        let path = std::env::temp_dir().join("chroniclelife_test_missing_definitely_not_here.json");
+        let _ = fs::remove_file(&path);
+        assert_eq!(read_file_contents(&path), Ok(None));
+    }
+
+    #[test]
+    fn existing_readable_file_is_ok_some() {
+        let path = std::env::temp_dir().join("chroniclelife_test_existing_readable.json");
+        fs::write(&path, "{\"hello\":true}").unwrap();
+        assert_eq!(read_file_contents(&path), Ok(Some("{\"hello\":true}".to_string())));
+        let _ = fs::remove_file(&path);
+    }
+
+    // Note: on Windows, `read_to_string` on a *directory* path surprisingly reports
+    // `ErrorKind::NotFound` (raw OS error 3, ERROR_PATH_NOT_FOUND) rather than a distinct
+    // "is a directory" kind — so a directory path is NOT a valid way to exercise the Err
+    // branch here. Instead we open the file exclusively (share_mode(0)) to reproduce the
+    // real "locked file" scenario this task is guarding against.
+    #[cfg(windows)]
+    #[test]
+    fn locked_file_is_err_not_none() {
+        use std::fs::OpenOptions;
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let path = std::env::temp_dir().join("chroniclelife_test_locked.json");
+        fs::write(&path, "{}").unwrap();
+
+        let _locked = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .share_mode(0) // deny all sharing, forcing a genuine lock conflict
+            .open(&path)
+            .expect("failed to open exclusive lock for test setup");
+
+        let result = read_file_contents(&path);
+        assert!(
+            matches!(result, Err(_)),
+            "locked file must surface as Err, not None/Ok — got {result:?}"
+        );
+
+        drop(_locked);
+        let _ = fs::remove_file(&path);
+    }
 }

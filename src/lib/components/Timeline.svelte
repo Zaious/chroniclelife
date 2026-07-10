@@ -11,6 +11,13 @@
   import TimelineRow from './TimelineRow.svelte';
   import EditPopover from './EditPopover.svelte';
 
+  interface Props {
+    /** 目前生效的主題(system 已解析成實際的 dark/light);逾期灰階樣式需要據此調整對比度。 */
+    themeMode: 'dark' | 'light';
+  }
+
+  const { themeMode }: Props = $props();
+
   const ROW_SPACING_PX: Record<RowSpacing, number> = { compact: 4, normal: 9, loose: 16 };
 
   function isOverflowing(task: Task, nowMs: number, windowDays: number): boolean {
@@ -88,6 +95,7 @@
           now={nowMs}
           settings={$settings}
           categoryColor={colorFor(task)}
+          {themeMode}
           onOpen={handleRowOpen}
         />
       {/each}

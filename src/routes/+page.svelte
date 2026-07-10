@@ -7,7 +7,9 @@
   import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
   import { dockTo, setPinned, onWindowMoved, setWindowPos } from '$lib/shell/window';
+  import { syncAutostart } from '$lib/shell/autostart';
   import { initStores, settings, updateSettings } from '$lib/stores/app';
+  import { degraded } from '$lib/stores/persistence';
   import type { DockSide } from '$lib/core/types';
   import Timeline from '$lib/components/Timeline.svelte';
   import TaskForm from '$lib/components/TaskForm.svelte';
@@ -34,6 +36,10 @@
       }
       await setPinned(s.alwaysOnTop);
       unlistenMoved = await onWindowMoved((pos) => updateSettings({ windowPos: pos }));
+      // 開機自啟:讓系統實際登錄狀態追上 settings.autostart(可能因手動改機碼、或上次設定未成功套用而不一致)。
+      syncAutostart(s.autostart).catch((err) => {
+        console.error('syncAutostart failed', err);
+      });
       ready = true;
     })();
   });
@@ -151,6 +157,12 @@
     </div>
   </div>
 
+  {#if $degraded}
+    <div class="degraded-banner" role="alert">
+      ⚠ 資料檔讀取失敗,已進入唯讀模式,重啟後重試
+    </div>
+  {/if}
+
   {#if activePanel === 'add'}
     <div class="panel">
       <TaskForm />
@@ -162,7 +174,7 @@
   {/if}
 
   <div class="body">
-    <Timeline />
+    <Timeline themeMode={effectiveThemeMode} />
   </div>
 </main>
 
@@ -239,6 +251,15 @@
   .icon-btn.active {
     background: rgba(79, 142, 247, 0.55);
     border-color: rgba(79, 142, 247, 0.8);
+  }
+
+  .degraded-banner {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: #fff;
+    background: rgba(210, 60, 50, 0.9);
   }
 
   .panel {

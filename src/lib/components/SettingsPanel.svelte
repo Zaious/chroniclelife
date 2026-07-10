@@ -2,10 +2,10 @@
   /**
    * 設定面板(PLANNING.md §6):倒數/外觀/版面/行為設定,全部即時生效(updateSettings 已自動持久化)。
    * 分類管理(CategoryManager)附於底部,與設定面板共用同一個滾動容器。
-   * autostart 為 M4 範圍,此處不顯示。
    */
   import { settings, updateSettings } from '../stores/app';
   import type { RowSpacing, Theme, DockSide, LabelPosition, OverflowDisplay, OverdueStyle } from '../core/types';
+  import { setAutostart } from '../shell/autostart';
   import CategoryManager from './CategoryManager.svelte';
 
   const THRESHOLD_PRESETS = [12, 24, 48] as const;
@@ -65,6 +65,15 @@
 
   function handleOverdueStyleChange(event: Event): void {
     updateSettings({ overdueStyle: (event.currentTarget as HTMLSelectElement).value as OverdueStyle });
+  }
+
+  /** 切換開機自啟:先更新設定(即持久化),再讓系統實際登錄狀態追上;plugin 呼叫失敗僅記錄,不影響設定值。 */
+  function handleAutostartChange(event: Event): void {
+    const checked = (event.currentTarget as HTMLInputElement).checked;
+    updateSettings({ autostart: checked });
+    void setAutostart(checked).catch((err) => {
+      console.error('setAutostart failed', err);
+    });
   }
 </script>
 
@@ -200,6 +209,12 @@
       <label>
         <input type="checkbox" checked={$settings.alwaysOnTop} onchange={handlePinnedChange} />
         視窗置頂
+      </label>
+    </div>
+    <div class="row">
+      <label>
+        <input type="checkbox" checked={$settings.autostart} onchange={handleAutostartChange} />
+        開機時啟動
       </label>
     </div>
     <div class="row">

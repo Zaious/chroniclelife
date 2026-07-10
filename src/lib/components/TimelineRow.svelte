@@ -19,7 +19,11 @@
   /** 即使剩餘時間趨近於 0,也保留一小截可見殘條 (PLANNING.md §2.1)。 */
   const MIN_BAR_WIDTH_PX = 6;
 
-  const OVERDUE_COLORS = { red: '#e24b4a', gray: '#888888' } as const;
+  /**
+   * 逾期灰階樣式需要主題感知:深色底用 #888888 對比已足夠;
+   * 淺色底(白底深字)同一個灰在白底上太淡,改用較深的 #666666 維持可讀對比。
+   */
+  const OVERDUE_GRAY: Record<'dark' | 'light', string> = { dark: '#888888', light: '#666666' };
   const CHECKPOINT_DUE_COLOR = '#ff453a';
   const LABEL_COLOR_NORMAL = 'var(--label-color, rgba(240, 240, 240, 0.92))';
 
@@ -30,11 +34,13 @@
     settings: Settings;
     /** 該任務所屬分類的顯示色(未分類已由呼叫端解析為 UNCATEGORIZED_COLOR) */
     categoryColor: string;
+    /** 目前生效的主題,用於逾期灰階樣式的對比調整 */
+    themeMode: 'dark' | 'light';
     /** 點擊整列 → 通知呼叫端開啟編輯 popover(PLANNING.md §2.5) */
     onOpen?: (task: Task, rowEl: HTMLElement) => void;
   }
 
-  const { task, now, settings, categoryColor, onOpen }: Props = $props();
+  const { task, now, settings, categoryColor, themeMode, onOpen }: Props = $props();
 
   let trackWidth = $state(0);
   let rowEl: HTMLDivElement | undefined = $state();
@@ -111,7 +117,11 @@
   );
 
   const barColor = $derived(
-    mode === 'overdue' ? OVERDUE_COLORS[settings.overdueStyle] : categoryColor,
+    mode === 'overdue'
+      ? settings.overdueStyle === 'gray'
+        ? OVERDUE_GRAY[themeMode]
+        : '#e24b4a'
+      : categoryColor,
   );
   const labelColor = $derived(mode === 'overdue' ? barColor : LABEL_COLOR_NORMAL);
 
