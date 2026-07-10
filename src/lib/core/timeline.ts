@@ -118,6 +118,51 @@ export function checkpointState(cp: Checkpoint, nowMs: number): CheckpointState 
   return 'upcoming';
 }
 
+/**
+ * 檢查點時間合法範圍判定 (PLANNING.md §2.4):必須介於「現在 ~ 截止日」之間(含邊界)。
+ */
+export function isCheckpointTimeValid(atMs: number, nowMs: number, deadlineMs: number): boolean {
+  return atMs >= nowMs && atMs <= deadlineMs;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/**
+ * 由本地日期/時間欄位字串組出含本地時區偏移的 ISO 8601 字串。
+ * time 為空字串時使用 fallbackTime(預設 "23:59",對應「未填時間視為當日 23:59」的規則)。
+ * 例:toLocalIso('2026-07-15', '09:30') → "2026-07-15T09:30:00+08:00"(依執行環境時區)。
+ */
+export function toLocalIso(dateStr: string, timeStr: string, fallbackTime = '23:59'): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const [hh, mm] = (timeStr || fallbackTime).split(':').map(Number);
+  const dt = new Date(y, m - 1, d, hh, mm, 0, 0);
+
+  const offsetMin = -dt.getTimezoneOffset();
+  const sign = offsetMin >= 0 ? '+' : '-';
+  const offH = pad2(Math.floor(Math.abs(offsetMin) / 60));
+  const offM = pad2(Math.abs(offsetMin) % 60);
+
+  return (
+    `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}` +
+    `T${pad2(dt.getHours())}:${pad2(dt.getMinutes())}:${pad2(dt.getSeconds())}` +
+    `${sign}${offH}:${offM}`
+  );
+}
+
+/**
+ * ISO 8601 字串 → 本地日期/時間欄位字串(供表單 <input type="date"> / <input type="time"> 顯示用)。
+ * 與 toLocalIso 互為反函式。
+ */
+export function isoToLocalParts(iso: string): { date: string; time: string } {
+  const d = new Date(isoToMs(iso));
+  return {
+    date: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
+    time: `${pad2(d.getHours())}:${pad2(d.getMinutes())}`,
+  };
+}
+
 /** 嚴格 ISO 8601 格式(含時區 Z 或 ±HH:MM),拒絕如 "YYYY/MM/DD" 等非 ISO 寫法。 */
 const ISO_8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/;
 

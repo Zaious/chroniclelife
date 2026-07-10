@@ -9,6 +9,7 @@
   import { now } from '../stores/now';
   import { sortTasksForDisplay, barRatio, isoToMs, MS_PER_DAY } from '../core/timeline';
   import TimelineRow from './TimelineRow.svelte';
+  import EditPopover from './EditPopover.svelte';
 
   const ROW_SPACING_PX: Record<RowSpacing, number> = { compact: 4, normal: 9, loose: 16 };
 
@@ -48,19 +49,70 @@
         ? 'max-content 1fr'
         : '1fr max-content',
   );
+
+  /**
+   * 列編輯 popover 狀態(PLANNING §2.5):一次只開一個,貼齊被點擊列的 viewport 座標。
+   * anchor 只在開啟當下取一次 getBoundingClientRect(),不隨後續 reflow 追蹤 —— popover 開啟期間
+   * 使用者多半在編輯,不會大幅調整版面;Esc / 點外部關閉已足以應付。
+   */
+  let openTaskId = $state<string | null>(null);
+  let anchor = $state<{ top: number; bottom: number } | null>(null);
+
+  function handleRowOpen(task: Task, rowEl: HTMLElement): void {
+    if (openTaskId === task.id) {
+      openTaskId = null;
+      anchor = null;
+      return;
+    }
+    const rect = rowEl.getBoundingClientRect();
+    anchor = { top: rect.top, bottom: rect.bottom };
+    openTaskId = task.id;
+  }
+
+  function closePopover(): void {
+    openTaskId = null;
+    anchor = null;
+  }
+
+  const openTask = $derived(visibleTasks.find((t) => t.id === openTaskId) ?? null);
 </script>
 
-<div class="timeline" style:row-gap="{gapPx}px" style:grid-template-columns={gridTemplate}>
-  {#if visibleTasks.length === 0}
-    <p class="empty">尚無任務,點擊右上角「+」新增一筆。</p>
-  {:else}
-    {#each visibleTasks as task (task.id)}
-      <TimelineRow {task} now={nowMs} settings={$settings} categoryColor={colorFor(task)} />
-    {/each}
+<div class="timeline-wrap">
+  <div class="timeline" style:row-gap="{gapPx}px" style:grid-template-columns={gridTemplate}>
+    {#if visibleTasks.length === 0}
+      <p class="empty">尚無任務,點擊右上角「+」新增一筆。</p>
+    {:else}
+      {#each visibleTasks as task (task.id)}
+        <TimelineRow
+          {task}
+          now={nowMs}
+          settings={$settings}
+          categoryColor={colorFor(task)}
+          onOpen={handleRowOpen}
+        />
+      {/each}
+    {/if}
+  </div>
+
+  {#if openTask && anchor}
+    <EditPopover
+      task={openTask}
+      categories={$categories}
+      nowMs={nowMs}
+      anchorTop={anchor.top}
+      anchorBottom={anchor.bottom}
+      onClose={closePopover}
+    />
   {/if}
 </div>
 
 <style>
+  .timeline-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+
   .timeline {
     display: grid;
     align-content: start;

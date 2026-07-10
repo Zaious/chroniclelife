@@ -9,6 +9,9 @@ import {
   sortTasksForDisplay,
   checkpointState,
   isoToMs,
+  isCheckpointTimeValid,
+  toLocalIso,
+  isoToLocalParts,
 } from './timeline';
 import type { Task, Checkpoint } from './types';
 
@@ -271,5 +274,56 @@ describe('isoToMs', () => {
 
   it('空字串會 throw', () => {
     expect(() => isoToMs('')).toThrow();
+  });
+});
+
+describe('isCheckpointTimeValid', () => {
+  it('介於現在與截止日之間(含邊界)回傳 true', () => {
+    expect(isCheckpointTimeValid(500, 0, 1000)).toBe(true);
+    expect(isCheckpointTimeValid(0, 0, 1000)).toBe(true);
+    expect(isCheckpointTimeValid(1000, 0, 1000)).toBe(true);
+  });
+
+  it('早於現在回傳 false', () => {
+    expect(isCheckpointTimeValid(-1, 0, 1000)).toBe(false);
+  });
+
+  it('晚於截止日回傳 false', () => {
+    expect(isCheckpointTimeValid(1001, 0, 1000)).toBe(false);
+  });
+});
+
+describe('toLocalIso / isoToLocalParts', () => {
+  it('組出的 ISO 字串轉回 epoch ms 等於本地時間建構的 Date', () => {
+    const iso = toLocalIso('2026-07-15', '09:30');
+    const expected = new Date(2026, 6, 15, 9, 30, 0, 0).getTime();
+    expect(isoToMs(iso)).toBe(expected);
+  });
+
+  it('時間留空時預設 23:59', () => {
+    const iso = toLocalIso('2026-07-15', '');
+    const expected = new Date(2026, 6, 15, 23, 59, 0, 0).getTime();
+    expect(isoToMs(iso)).toBe(expected);
+  });
+
+  it('可自訂 fallbackTime', () => {
+    const iso = toLocalIso('2026-07-15', '', '08:00');
+    const expected = new Date(2026, 6, 15, 8, 0, 0, 0).getTime();
+    expect(isoToMs(iso)).toBe(expected);
+  });
+
+  it('輸出符合含時區的 ISO 8601 格式', () => {
+    const iso = toLocalIso('2026-07-15', '09:30');
+    expect(iso).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
+  });
+
+  it('isoToLocalParts 為 toLocalIso 的反函式', () => {
+    const iso = toLocalIso('2026-07-15', '09:30');
+    expect(isoToLocalParts(iso)).toEqual({ date: '2026-07-15', time: '09:30' });
+  });
+
+  it('isoToLocalParts 正確還原分鐘個位數補零', () => {
+    const iso = toLocalIso('2026-01-05', '08:05');
+    expect(isoToLocalParts(iso)).toEqual({ date: '2026-01-05', time: '08:05' });
   });
 });

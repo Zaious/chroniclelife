@@ -11,11 +11,13 @@
   import type { DockSide } from '$lib/core/types';
   import Timeline from '$lib/components/Timeline.svelte';
   import TaskForm from '$lib/components/TaskForm.svelte';
-  import CategoryManager from '$lib/components/CategoryManager.svelte';
+  import SettingsPanel from '$lib/components/SettingsPanel.svelte';
 
   let ready = $state(false);
-  let panelOpen = $state(false);
+  /** 「+」(新增任務)與「⚙」(設定)兩個頂部面板互斥,同時只開一個。 */
+  let activePanel = $state<'none' | 'add' | 'settings'>('none');
   let unlistenMoved: (() => void) | null = null;
+  let systemPrefersLight = $state(false);
 
   // 用來偵測「使用者變更了設定」而非「啟動時的初始值」,避免啟動流程與 $effect 重複呼叫。
   let previousAlwaysOnTop: boolean | null = null;
@@ -57,16 +59,51 @@
     previousDockSide = dockSide;
   });
 
+  // 主題:system 時跟隨 prefers-color-scheme,並在系統偏好變更時即時反映 (PLANNING.md §6)。
+  $effect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    systemPrefersLight = mq.matches;
+    const handleChange = (e: MediaQueryListEvent) => {
+      systemPrefersLight = e.matches;
+    };
+    mq.addEventListener('change', handleChange);
+    return () => mq.removeEventListener('change', handleChange);
+  });
+
+  const effectiveThemeMode = $derived<'dark' | 'light'>(
+    $settings.theme === 'system' ? (systemPrefersLight ? 'light' : 'dark') : $settings.theme,
+  );
+
+  /** 深色 = 現行配色;淺色 = 白底深字,對比夠即可 (PLANNING.md §6)。 */
+  const THEME_PALETTE = {
+    dark: { bg: '20, 20, 24', fg: '240, 240, 240', overlay: '255, 255, 255', border: '255, 255, 255' },
+    light: { bg: '255, 255, 255', fg: '28, 28, 32', overlay: '0, 0, 0', border: '0, 0, 0' },
+  } as const;
+
+  const palette = $derived(THEME_PALETTE[effectiveThemeMode]);
+  const shellBg = $derived(`rgba(${palette.bg}, ${$settings.windowOpacity})`);
+  const shellFg = $derived(`rgb(${palette.fg})`);
+  const labelColorVar = $derived(`rgba(${palette.fg}, 0.92)`);
+  const hoverBgVar = $derived(`rgba(${palette.overlay}, 0.06)`);
+  const iconHoverBgVar = $derived(`rgba(${palette.overlay}, 0.16)`);
+  const borderColorVar = $derived(`rgba(${palette.border}, 0.15)`);
+  /** 頂部管理面板:淡淡的黑色疊色即可(不覆蓋其他內容,不需高不透明度)。 */
+  const panelBgVar = `rgba(0, 0, 0, 0.2)`;
+  const panelBorderVar = $derived(`rgba(${palette.border}, 0.08)`);
+  /** 列編輯 popover 會浮在 Timeline 列之上,需要接近不透明的實色底才夠清楚可讀。 */
+  const surfaceBgVar = $derived(`rgba(${palette.bg}, 0.97)`);
+
   function togglePinned(): void {
     updateSettings({ alwaysOnTop: !$settings.alwaysOnTop });
   }
 
-  function setDock(side: DockSide): void {
-    updateSettings({ dockSide: side });
+  function toggleAddPanel(): void {
+    activePanel = activePanel === 'add' ? 'none' : 'add';
   }
 
-  function togglePanel(): void {
-    panelOpen = !panelOpen;
+  function toggleSettingsPanel(): void {
+    activePanel = activePanel === 'settings' ? 'none' : 'settings';
   }
 
   /** 避免點擊握把上的按鈕時,mousedown 冒泡觸發 data-tauri-drag-region 開始拖曳視窗。 */
@@ -75,7 +112,18 @@
   }
 </script>
 
-<main class="shell" style:background={`rgba(20, 20, 24, ${$settings.windowOpacity})`}>
+<main
+  class="shell"
+  style:background={shellBg}
+  style:color={shellFg}
+  style:--label-color={labelColorVar}
+  style:--hover-bg={hoverBgVar}
+  style:--icon-hover-bg={iconHoverBgVar}
+  style:--border-color={borderColorVar}
+  style:--panel-bg={panelBgVar}
+  style:--panel-border={panelBorderVar}
+  style:--surface-bg={surfaceBgVar}
+>
   <div class="handle" data-tauri-drag-region>
     <span class="title">ChronicleLife</span>
     <div class="handle-actions" role="toolbar" aria-label="視窗操作" tabindex="-1" onmousedown={stopDrag}>
@@ -89,31 +137,27 @@
       <button
         type="button"
         class="icon-btn"
-        class:active={$settings.dockSide === 'left'}
-        title="停靠左側"
-        onclick={() => setDock('left')}
-      >左</button>
+        class:active={activePanel === 'add'}
+        title={activePanel === 'add' ? '收合新增任務面板' : '新增任務'}
+        onclick={toggleAddPanel}
+      >{activePanel === 'add' ? '−' : '+'}</button>
       <button
         type="button"
         class="icon-btn"
-        class:active={$settings.dockSide === 'right'}
-        title="停靠右側"
-        onclick={() => setDock('right')}
-      >右</button>
-      <button
-        type="button"
-        class="icon-btn"
-        class:active={panelOpen}
-        title={panelOpen ? '收合管理面板' : '展開管理面板(新增任務/分類)'}
-        onclick={togglePanel}
-      >{panelOpen ? '−' : '+'}</button>
+        class:active={activePanel === 'settings'}
+        title={activePanel === 'settings' ? '收合設定面板' : '設定'}
+        onclick={toggleSettingsPanel}
+      >⚙</button>
     </div>
   </div>
 
-  {#if panelOpen}
+  {#if activePanel === 'add'}
     <div class="panel">
       <TaskForm />
-      <CategoryManager />
+    </div>
+  {:else if activePanel === 'settings'}
+    <div class="panel settings">
+      <SettingsPanel />
     </div>
   {/if}
 
@@ -138,7 +182,6 @@
     box-sizing: border-box;
     border-radius: 12px;
     overflow: hidden;
-    color: #f0f0f0;
     font-family:
       system-ui,
       -apple-system,
@@ -154,8 +197,9 @@
     height: 28px;
     padding: 0 8px;
     font-size: 12px;
-    color: rgba(240, 240, 240, 0.7);
-    background: rgba(255, 255, 255, 0.06);
+    color: inherit;
+    opacity: 0.85;
+    background: var(--hover-bg, rgba(255, 255, 255, 0.06));
     cursor: move;
     user-select: none;
   }
@@ -180,8 +224,8 @@
     height: 22px;
     padding: 0;
     border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+    background: var(--hover-bg, rgba(255, 255, 255, 0.06));
     color: inherit;
     font: inherit;
     line-height: 1;
@@ -189,7 +233,7 @@
   }
 
   .icon-btn:hover {
-    background: rgba(255, 255, 255, 0.16);
+    background: var(--icon-hover-bg, rgba(255, 255, 255, 0.16));
   }
 
   .icon-btn.active {
@@ -203,9 +247,12 @@
     flex-direction: column;
     gap: 8px;
     padding: 8px 10px;
-    background: rgba(0, 0, 0, 0.2);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    max-height: 45vh;
+    overflow-y: auto;
+    background: var(--panel-bg, rgba(0, 0, 0, 0.2));
+    border-bottom: 1px solid var(--panel-border, rgba(255, 255, 255, 0.08));
     font-size: 12px;
+    color: inherit;
   }
 
   .body {

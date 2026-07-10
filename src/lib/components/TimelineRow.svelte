@@ -11,34 +11,71 @@
     checkpointState,
     rowMode as computeRowMode,
     overdueDays as computeOverdueDays,
+    formatCountdown,
     isoToMs,
   } from '../core/timeline';
+  import { secondNow } from '../stores/secondNow';
 
   /** 即使剩餘時間趨近於 0,也保留一小截可見殘條 (PLANNING.md §2.1)。 */
   const MIN_BAR_WIDTH_PX = 6;
 
   const OVERDUE_COLORS = { red: '#e24b4a', gray: '#888888' } as const;
   const CHECKPOINT_DUE_COLOR = '#ff453a';
-  const LABEL_COLOR_NORMAL = 'rgba(240, 240, 240, 0.92)';
+  const LABEL_COLOR_NORMAL = 'var(--label-color, rgba(240, 240, 240, 0.92))';
 
   interface Props {
     task: Task;
-    /** 目前時間 epoch ms */
+    /** 目前時間 epoch ms(分鐘級,由 Timeline 的 now store 提供) */
     now: number;
     settings: Settings;
     /** 該任務所屬分類的顯示色(未分類已由呼叫端解析為 UNCATEGORIZED_COLOR) */
     categoryColor: string;
+    /** 點擊整列 → 通知呼叫端開啟編輯 popover(PLANNING.md §2.5) */
+    onOpen?: (task: Task, rowEl: HTMLElement) => void;
   }
 
-  const { task, now, settings, categoryColor }: Props = $props();
+  const { task, now, settings, categoryColor, onOpen }: Props = $props();
 
   let trackWidth = $state(0);
+  let rowEl: HTMLDivElement | undefined = $state();
 
   const deadlineMs = $derived(isoToMs(task.deadline));
   const mode = $derived(computeRowMode(deadlineMs, now, settings.countdownThresholdHours));
-  const ratio = $derived(barRatio(deadlineMs, now, settings.windowDays));
+
+  /**
+   * 秒級 tick(CLAUDE.md 硬規則 6):只有在 mode === 'countdown' 時才訂閱 secondNow,
+   * 離開倒數模式(或元件卸載)立刻取消訂閱 —— 這是「只有 countdown 列才跑秒級 tick」的實際落點。
+   */
+  let secondTick = $state<number | null>(null);
+  $effect(() => {
+    if (mode !== 'countdown') {
+      secondTick = null;
+      return;
+    }
+    const unsubscribe = secondNow.subscribe((v) => {
+      secondTick = v;
+    });
+    return () => unsubscribe();
+  });
+
+  /** 倒數列用秒級時間計算長度與標籤;其餘列維持分鐘級 now(省電)。 */
+  const effectiveNow = $derived(mode === 'countdown' && secondTick != null ? secondTick : now);
+
+  const ratio = $derived(barRatio(deadlineMs, effectiveNow, settings.windowDays));
   const barWidthPx = $derived(Math.max(ratio * trackWidth, MIN_BAR_WIDTH_PX));
   const overdueDaysVal = $derived(mode === 'overdue' ? computeOverdueDays(deadlineMs, now) : 0);
+  const isBlinking = $derived(mode === 'countdown' && settings.blinkEnabled);
+
+  function handleRowClick(): void {
+    if (rowEl) onOpen?.(task, rowEl);
+  }
+
+  function handleRowKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleRowClick();
+    }
+  }
 
   const anchorSide = $derived(settings.dockSide === 'left' ? 'left' : 'right');
   /**
@@ -68,7 +105,9 @@
   const labelText = $derived(
     mode === 'overdue'
       ? `已逾期 ${overdueDaysVal} 天 ${task.title}`
-      : `${formatMD(deadlineMs)} ${task.title}`,
+      : mode === 'countdown'
+        ? `${formatCountdown(deadlineMs - effectiveNow)} ${task.title}`
+        : `${formatMD(deadlineMs)} ${task.title}`,
   );
 
   const barColor = $derived(
@@ -120,7 +159,15 @@
   });
 </script>
 
-<div class="row" style:font-size="{settings.fontSizePx}px">
+<div
+  class="row"
+  role="button"
+  tabindex="0"
+  bind:this={rowEl}
+  style:font-size="{settings.fontSizePx}px"
+  onclick={handleRowClick}
+  onkeydown={handleRowKeydown}
+>
   {#if edgeLabelBeforeTrack}
     <span class="label" style:color={labelColor}>{labelText}</span>
   {/if}
@@ -132,6 +179,7 @@
   >
     <div
       class="bar"
+      class:blink={isBlinking}
       style="{anchorSide}: 0px;"
       style:background={barColor}
       style:height="{settings.barHeightPx}px"
@@ -171,10 +219,16 @@
     grid-column: 1 / -1;
     align-items: center;
     min-width: 0;
+    cursor: pointer;
   }
 
   .row:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--hover-bg, rgba(255, 255, 255, 0.04));
+  }
+
+  .row:focus-visible {
+    outline: 1px solid rgba(79, 142, 247, 0.8);
+    outline-offset: -1px;
   }
 
   .track {
@@ -186,6 +240,20 @@
     position: absolute;
     top: 0;
     border-radius: 999px;
+  }
+
+  .bar.blink {
+    animation: bar-blink 1s ease-in-out infinite;
+  }
+
+  @keyframes bar-blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
   }
 
   .checkpoint-line {
