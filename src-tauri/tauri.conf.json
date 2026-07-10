@@ -12,9 +12,18 @@
   "app": {
     "windows": [
       {
-        "title": "chroniclelife",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "ChronicleLife",
+        "width": 380,
+        "height": 520,
+        "minWidth": 300,
+        "minHeight": 160,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "resizable": true
       }
     ],
     "security": {
