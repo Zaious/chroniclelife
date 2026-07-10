@@ -6,7 +6,13 @@
   import { settings, updateSettings } from '../stores/app';
   import type { RowSpacing, Theme, DockSide, LabelPosition, OverflowDisplay, OverdueStyle } from '../core/types';
   import { setAutostart } from '../shell/autostart';
+  import { APP_AUTHOR, APP_REPO_URL, openExternal } from '../shell/links';
   import CategoryManager from './CategoryManager.svelte';
+
+  function openRepo(event: MouseEvent): void {
+    event.preventDefault();
+    void openExternal(APP_REPO_URL);
+  }
 
   const THRESHOLD_PRESETS = [12, 24, 48] as const;
 
@@ -229,6 +235,11 @@
   <section>
     <CategoryManager />
   </section>
+
+  <section class="about">
+    <span>ChronicleLife · 作者 {APP_AUTHOR}</span>
+    <a href={APP_REPO_URL} onclick={openRepo}>原始碼 GitHub</a>
+  </section>
 </div>
 
 <style>
@@ -242,6 +253,21 @@
   section + section {
     padding-top: 8px;
     border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  }
+
+  .about {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+    opacity: 0.7;
+  }
+
+  .about a {
+    color: inherit;
+    text-decoration: underline;
+    white-space: nowrap;
   }
 
   h4 {
