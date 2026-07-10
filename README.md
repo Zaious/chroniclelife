@@ -10,12 +10,9 @@
 
 ## 下載
 
-到 [Releases](https://github.com/Zaious/chroniclelife/releases) 頁下載最新版:
+到 [Releases](https://github.com/Zaious/chroniclelife/releases) 頁下載最新版的 `chroniclelife.exe` — 免安裝單一執行檔,雙擊即用(Win11 內建 WebView2,無需額外安裝)。
 
-- `ChronicleLife_x.y.z_x64-setup.exe` — Windows 安裝版
-- `chroniclelife.exe` — 免安裝單一執行檔,雙擊即用(Win11 內建 WebView2,無需額外安裝)
-
-資料存在 `%APPDATA%\life.chronicle.app\`,與安裝/移除無關。
+資料存在 `%APPDATA%\life.chronicle.app\`,與執行檔位置無關,搬移 exe 不影響資料。
 
 ## 開發
 
@@ -36,7 +33,7 @@ Rust 端變更後,可在 `src-tauri/` 下執行 `cargo check` 做快速編譯檢
 npm run tauri build
 ```
 
-編譯完成後,安裝檔位於 `src-tauri/target/release/bundle/nsis/*.exe`,免安裝執行檔位於 `src-tauri/target/release/chroniclelife.exe`。
+編譯完成後,免安裝執行檔位於 `src-tauri/target/release/chroniclelife.exe`(不產生安裝檔)。
 
 ## 發布
 

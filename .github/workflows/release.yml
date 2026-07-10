@@ -31,19 +31,14 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build and create release
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: ChronicleLife ${{ github.ref_name }}
-          releaseBody: |
-            自動編譯發布。安裝版:`ChronicleLife_*_x64-setup.exe`;免安裝單檔:`chroniclelife.exe`。
-          releaseDraft: false
-          prerelease: false
+      - name: Build portable exe
+        run: npm run tauri build
 
-      - name: Attach portable exe
-        run: gh release upload ${{ github.ref_name }} "src-tauri/target/release/chroniclelife.exe" --clobber
+      - name: Create release with portable exe
+        run: >
+          gh release create ${{ github.ref_name }}
+          "src-tauri/target/release/chroniclelife.exe"
+          --title "ChronicleLife ${{ github.ref_name }}"
+          --notes "免安裝單檔:下載 chroniclelife.exe 雙擊即用(Win11 內建 WebView2,無需安裝)。"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
