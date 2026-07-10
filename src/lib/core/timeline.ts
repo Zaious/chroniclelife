@@ -163,6 +163,37 @@ export function isoToLocalParts(iso: string): { date: string; time: string } {
   };
 }
 
+/**
+ * 合法年份範圍(含邊界)。用於擋掉 `<input type="date">` 逐字輸入年份時的中間態
+ * (例如打「2026」的第一個「2」時,瀏覽器已把值視為 "0002-07-12" 並觸發 change/input 事件)。
+ * 不在此範圍內的年份一律視為「使用者還沒打完」,不得提交寫入。
+ */
+export const MIN_VALID_YEAR = 2000;
+export const MAX_VALID_YEAR = 2200;
+
+/** 年份是否落在合法範圍 [MIN_VALID_YEAR, MAX_VALID_YEAR](含邊界)。 */
+export function isYearInValidRange(year: number): boolean {
+  return Number.isInteger(year) && year >= MIN_VALID_YEAR && year <= MAX_VALID_YEAR;
+}
+
+/**
+ * 驗證後的 toLocalIso:年份不在 [MIN_VALID_YEAR, MAX_VALID_YEAR] 或 dateStr 為空時回傳 null,
+ * 呼叫端應視為「不合法輸入」— 顯示錯誤、還原欄位為原值、不寫入 store。
+ * 合法時回傳與 toLocalIso 相同的 ISO 8601 字串。
+ */
+export function toLocalIsoValidated(dateStr: string, timeStr: string, fallbackTime = '23:59'): string | null {
+  if (!dateStr) return null;
+  const year = Number(dateStr.split('-')[0]);
+  if (!isYearInValidRange(year)) return null;
+  return toLocalIso(dateStr, timeStr, fallbackTime);
+}
+
+/** 今天的本地日期字串(YYYY-MM-DD),供表單日期欄預設值使用。 */
+export function todayLocalDateStr(nowMs: number): string {
+  const d = new Date(nowMs);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
 /** 嚴格 ISO 8601 格式(含時區 Z 或 ±HH:MM),拒絕如 "YYYY/MM/DD" 等非 ISO 寫法。 */
 const ISO_8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/;
 

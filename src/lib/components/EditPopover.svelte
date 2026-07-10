@@ -1,12 +1,23 @@
 <script lang="ts">
   /**
    * 列編輯 popover(PLANNING.md §2.5):貼齊被點擊的列展開。
-   * 標題/日期時間/分類即時生效;檢查點清單管理;標記完成/刪除任務。
+   * 標題即時生效(change);日期/時間欄位改為 blur(focusout)才 commit,並先驗證年份範圍
+   * (toLocalIsoValidated)——避免 <input type="date"> 逐字輸入年份時每敲一位數字就觸發
+   * change 把任務寫成逾期數萬天,還跟使用者打字互搶焦點;不合法時 inline 顯示錯誤並還原欄位。
+   * 分類即時生效;檢查點清單管理;標記完成/刪除任務。
    * Esc 或點擊 popover 外關閉;由呼叫端(Timeline)保證一次只開一個。
    */
   import { onMount, onDestroy } from 'svelte';
   import type { Task, Category } from '../core/types';
-  import { toLocalIso, isoToLocalParts, isCheckpointTimeValid, isoToMs } from '../core/timeline';
+  import {
+    toLocalIsoValidated,
+    isoToLocalParts,
+    isCheckpointTimeValid,
+    isoToMs,
+    todayLocalDateStr,
+    MIN_VALID_YEAR,
+    MAX_VALID_YEAR,
+  } from '../core/timeline';
   import { updateTask, removeTask, toggleTaskDone, addCheckpoint } from '../stores/app';
   import CheckpointItem from './CheckpointItem.svelte';
 
@@ -25,16 +36,22 @@
 
   let popoverEl: HTMLDivElement | undefined = $state();
 
-  // ---- 標題 / 日期時間(本地緩衝,commit 時才寫入 store) ----
+  // ---- 標題 / 日期時間(本地緩衝,blur 才 commit 寫入 store)----
+  // 日期/時間欄位刻意不用 change 就提交:Chromium 的 <input type="date"> 逐字輸入年份時
+  // 每敲一個數字就會發一次 change(例如打「2026」的「2」會先變成 "0002-07-12"),
+  // 若照發即寫入會把任務改成逾期數萬天,還跟使用者打字互搶焦點。改成 blur 才 commit,
+  // 並在 commit 前驗證年份範圍(toLocalIsoValidated),不合法就顯示錯誤並還原,不寫入。
   let title = $state('');
   let dateStr = $state('');
   let timeStr = $state('');
+  let deadlineError = $state('');
 
   $effect(() => {
     title = task.title;
     const parts = isoToLocalParts(task.deadline);
     dateStr = parts.date;
     timeStr = parts.time;
+    deadlineError = '';
   });
 
   function commitTitle(): void {
@@ -46,14 +63,25 @@
     if (trimmed !== task.title) updateTask(task.id, { title: trimmed });
   }
 
+  function resetDeadlineFields(): void {
+    const parts = isoToLocalParts(task.deadline);
+    dateStr = parts.date;
+    timeStr = parts.time;
+  }
+
   function commitDeadline(): void {
     if (!dateStr) {
-      const parts = isoToLocalParts(task.deadline);
-      dateStr = parts.date;
-      timeStr = parts.time;
+      resetDeadlineFields();
+      deadlineError = '';
       return;
     }
-    const iso = toLocalIso(dateStr, timeStr);
+    const iso = toLocalIsoValidated(dateStr, timeStr);
+    if (!iso) {
+      deadlineError = `年份需介於 ${MIN_VALID_YEAR} ~ ${MAX_VALID_YEAR} 之間`;
+      resetDeadlineFields();
+      return;
+    }
+    deadlineError = '';
     if (iso !== task.deadline) updateTask(task.id, { deadline: iso });
   }
 
@@ -72,9 +100,10 @@
     onClose();
   }
 
-  // ---- 新增檢查點 ----
+  // ---- 新增檢查點:日期欄預設今天,方便直接調整 ----
+  // 用 Date.now()(而非 nowMs prop)取初值:只需要「開啟當下的今天」,不需要隨 nowMs 更新而重新反應。
   let newLabel = $state('');
-  let newDate = $state('');
+  let newDate = $state(todayLocalDateStr(Date.now()));
   let newTime = $state('');
   let addError = $state('');
 
@@ -85,7 +114,11 @@
       addError = '請填寫名稱與日期';
       return;
     }
-    const iso = toLocalIso(newDate, newTime, '23:59');
+    const iso = toLocalIsoValidated(newDate, newTime, '23:59');
+    if (!iso) {
+      addError = `年份需介於 ${MIN_VALID_YEAR} ~ ${MAX_VALID_YEAR} 之間`;
+      return;
+    }
     const atMs = isoToMs(iso);
     const deadlineMs = isoToMs(task.deadline);
     if (!isCheckpointTimeValid(atMs, nowMs, deadlineMs)) {
@@ -94,7 +127,7 @@
     }
     addCheckpoint(task.id, { label: trimmed, at: iso });
     newLabel = '';
-    newDate = '';
+    newDate = todayLocalDateStr(Date.now());
     newTime = '';
     addError = '';
   }
@@ -152,9 +185,12 @@
     <input class="title-input" type="text" bind:value={title} onchange={commitTitle} aria-label="標題" />
   </div>
   <div class="field-row">
-    <input type="date" bind:value={dateStr} onchange={commitDeadline} aria-label="截止日期" />
-    <input type="time" bind:value={timeStr} onchange={commitDeadline} aria-label="截止時間" />
+    <input type="date" bind:value={dateStr} onblur={commitDeadline} aria-label="截止日期" />
+    <input type="time" bind:value={timeStr} onblur={commitDeadline} aria-label="截止時間" />
   </div>
+  {#if deadlineError}
+    <p class="error">{deadlineError}</p>
+  {/if}
   <div class="field-row">
     <select value={task.categoryId ?? ''} onchange={handleCategoryChange} aria-label="分類">
       <option value="">未分類</option>
@@ -210,6 +246,7 @@
 
   .field-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
   }
 
@@ -248,11 +285,18 @@
 
   .add-checkpoint {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     margin-top: 4px;
   }
 
   .add-checkpoint input[type='text'] {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .add-checkpoint input[type='date'],
+  .add-checkpoint input[type='time'] {
     flex: 1 1 auto;
     min-width: 0;
   }
@@ -265,6 +309,7 @@
 
   .actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     justify-content: flex-end;
     border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));

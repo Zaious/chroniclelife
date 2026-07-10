@@ -2,12 +2,14 @@
   /**
    * 新增任務表單。只依賴 stores(不依賴 shell/或 routes/),M2 再決定如何掛入頁面。
    * 日期必填,時間選填 — 未填時間時存當日 23:59(本地時區)。
+   * 日期欄預設今天(本地時區),方便使用者直接在此基礎上調整。
    * 存檔一律轉為含時區偏移的 ISO 8601 字串(CLAUDE.md 硬規則 1)。
    */
   import { categories, addTask } from '../stores/app';
+  import { todayLocalDateStr } from '../core/timeline';
 
   let title = $state('');
-  let dateStr = $state('');
+  let dateStr = $state(todayLocalDateStr(Date.now()));
   let timeStr = $state('');
   let categoryId = $state<string | null>(null);
 
@@ -42,7 +44,7 @@
     addTask({ title: trimmedTitle, deadline, categoryId });
 
     title = '';
-    dateStr = '';
+    dateStr = todayLocalDateStr(Date.now());
     timeStr = '';
     categoryId = null;
   }

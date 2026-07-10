@@ -6,6 +6,7 @@
    */
   import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
+  import { invoke } from '@tauri-apps/api/core';
   import { dockTo, setPinned, onWindowMoved, setWindowPos } from '$lib/shell/window';
   import { syncAutostart } from '$lib/shell/autostart';
   import { initStores, settings, updateSettings } from '$lib/stores/app';
@@ -93,6 +94,12 @@
   const labelColorVar = $derived(`rgba(${palette.fg}, 0.92)`);
   const hoverBgVar = $derived(`rgba(${palette.overlay}, 0.06)`);
   const iconHoverBgVar = $derived(`rgba(${palette.overlay}, 0.16)`);
+  /**
+   * 握把列(拖曳區)背景:視窗不透明度可調到 0(全透明),但握把仍需維持一個可見、可辨識的
+   * 拖曳把手 —— 底色 alpha 設一個不隨 windowOpacity 降到 0 的地板值(0.15,高於一般 hover
+   * 疊色的 0.06),讓使用者在任何不透明度設定下都看得到、抓得到這條拖曳區。
+   */
+  const handleBgVar = $derived(`rgba(${palette.overlay}, 0.15)`);
   const borderColorVar = $derived(`rgba(${palette.border}, 0.15)`);
   /** 頂部管理面板:淡淡的黑色疊色即可(不覆蓋其他內容,不需高不透明度)。 */
   const panelBgVar = `rgba(0, 0, 0, 0.2)`;
@@ -116,6 +123,13 @@
   function stopDrag(event: MouseEvent): void {
     event.stopPropagation();
   }
+
+  /** 完全退出應用程式(非隱藏)——托盤選單「離開」以外,握把列也提供一個直接入口。 */
+  function handleQuit(): void {
+    void invoke('quit_app').catch((err) => {
+      console.error('quit_app failed', err);
+    });
+  }
 </script>
 
 <main
@@ -129,6 +143,7 @@
   style:--panel-bg={panelBgVar}
   style:--panel-border={panelBorderVar}
   style:--surface-bg={surfaceBgVar}
+  style:--handle-bg={handleBgVar}
 >
   <div class="handle" data-tauri-drag-region>
     <span class="title">ChronicleLife</span>
@@ -154,6 +169,12 @@
         title={activePanel === 'settings' ? '收合設定面板' : '設定'}
         onclick={toggleSettingsPanel}
       >⚙</button>
+      <button
+        type="button"
+        class="icon-btn"
+        title="離開 ChronicleLife"
+        onclick={handleQuit}
+      >×</button>
     </div>
   </div>
 
@@ -211,7 +232,7 @@
     font-size: 12px;
     color: inherit;
     opacity: 0.85;
-    background: var(--hover-bg, rgba(255, 255, 255, 0.06));
+    background: var(--handle-bg, rgba(255, 255, 255, 0.15));
     cursor: move;
     user-select: none;
   }

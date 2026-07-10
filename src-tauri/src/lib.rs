@@ -74,6 +74,13 @@ fn save_settings(app: AppHandle, json: String) -> Result<(), String> {
     write_file_atomic(&path, &json)
 }
 
+/// Fully exits the application (not just hiding the window). Invoked from the frontend's
+/// handle-row "×" button, mirroring the tray menu's "離開" entry.
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
 /// Shows the main window if hidden, hides it if shown. No-op if the window is missing.
 fn toggle_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -99,7 +106,8 @@ pub fn run() {
             load_data,
             save_data,
             load_settings,
-            save_settings
+            save_settings,
+            quit_app
         ])
         .setup(|app| {
             let show_hide = MenuItem::with_id(app, "show_hide", "顯示/隱藏", true, None::<&str>)?;

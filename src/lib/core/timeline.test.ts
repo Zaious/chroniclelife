@@ -12,6 +12,9 @@ import {
   isCheckpointTimeValid,
   toLocalIso,
   isoToLocalParts,
+  isYearInValidRange,
+  toLocalIsoValidated,
+  todayLocalDateStr,
 } from './timeline';
 import type { Task, Checkpoint } from './types';
 
@@ -325,5 +328,68 @@ describe('toLocalIso / isoToLocalParts', () => {
   it('isoToLocalParts 正確還原分鐘個位數補零', () => {
     const iso = toLocalIso('2026-01-05', '08:05');
     expect(isoToLocalParts(iso)).toEqual({ date: '2026-01-05', time: '08:05' });
+  });
+});
+
+describe('isYearInValidRange', () => {
+  it('下界 2000 與上界 2200 皆合法(含邊界)', () => {
+    expect(isYearInValidRange(2000)).toBe(true);
+    expect(isYearInValidRange(2200)).toBe(true);
+  });
+
+  it('一般年份合法', () => {
+    expect(isYearInValidRange(2026)).toBe(true);
+  });
+
+  it('低於下界不合法', () => {
+    expect(isYearInValidRange(1999)).toBe(false);
+    expect(isYearInValidRange(2)).toBe(false);
+    expect(isYearInValidRange(0)).toBe(false);
+  });
+
+  it('高於上界不合法', () => {
+    expect(isYearInValidRange(2201)).toBe(false);
+  });
+
+  it('非整數(NaN)不合法', () => {
+    expect(isYearInValidRange(NaN)).toBe(false);
+  });
+});
+
+describe('toLocalIsoValidated', () => {
+  it('合法輸入回傳與 toLocalIso 相同結果', () => {
+    expect(toLocalIsoValidated('2026-07-15', '09:30')).toBe(toLocalIso('2026-07-15', '09:30'));
+  });
+
+  it('年份逐字輸入的中間態(如 "0002")回傳 null', () => {
+    expect(toLocalIsoValidated('0002-07-12', '10:00')).toBeNull();
+  });
+
+  it('年份低於下界回傳 null', () => {
+    expect(toLocalIsoValidated('1999-07-12', '10:00')).toBeNull();
+  });
+
+  it('年份高於上界回傳 null', () => {
+    expect(toLocalIsoValidated('2201-07-12', '10:00')).toBeNull();
+  });
+
+  it('空日期字串回傳 null', () => {
+    expect(toLocalIsoValidated('', '10:00')).toBeNull();
+  });
+
+  it('時間留空時沿用 fallbackTime', () => {
+    expect(toLocalIsoValidated('2026-07-15', '')).toBe(toLocalIso('2026-07-15', ''));
+  });
+});
+
+describe('todayLocalDateStr', () => {
+  it('回傳本地時區的 YYYY-MM-DD', () => {
+    const nowMs = new Date(2026, 6, 15, 13, 45, 0, 0).getTime();
+    expect(todayLocalDateStr(nowMs)).toBe('2026-07-15');
+  });
+
+  it('月份與日期個位數補零', () => {
+    const nowMs = new Date(2026, 0, 5, 0, 0, 0, 0).getTime();
+    expect(todayLocalDateStr(nowMs)).toBe('2026-01-05');
   });
 });

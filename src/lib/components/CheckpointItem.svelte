@@ -1,11 +1,20 @@
 <script lang="ts">
   /**
    * 編輯 popover 內的單一檢查點列:名稱、日期時間、ack 打勾、移除。
-   * 變更即時生效;時間變更需先通過 isCheckpointTimeValid(現在~截止日)才寫入 store,
-   * 不合法時 inline 顯示錯誤並還原欄位(PLANNING.md §2.4)。
+   * 日期/時間欄位 blur(focusout)才 commit(避免 <input type="date"> 逐字輸入年份時
+   * 每敲一位數字就觸發 change 寫入);commit 前先驗證年份範圍(toLocalIsoValidated),
+   * 再通過 isCheckpointTimeValid(現在~截止日)才寫入 store,任一不合法都 inline 顯示錯誤
+   * 並還原欄位(PLANNING.md §2.4)。
    */
   import type { Checkpoint } from '../core/types';
-  import { toLocalIso, isoToLocalParts, isCheckpointTimeValid, isoToMs } from '../core/timeline';
+  import {
+    toLocalIsoValidated,
+    isoToLocalParts,
+    isCheckpointTimeValid,
+    isoToMs,
+    MIN_VALID_YEAR,
+    MAX_VALID_YEAR,
+  } from '../core/timeline';
   import { updateCheckpoint, removeCheckpoint } from '../stores/app';
 
   interface Props {
@@ -54,7 +63,12 @@
       resetTime();
       return;
     }
-    const iso = toLocalIso(dateStr, timeStr);
+    const iso = toLocalIsoValidated(dateStr, timeStr);
+    if (!iso) {
+      error = `年份需介於 ${MIN_VALID_YEAR} ~ ${MAX_VALID_YEAR} 之間`;
+      resetTime();
+      return;
+    }
     const atMs = isoToMs(iso);
     if (!isCheckpointTimeValid(atMs, nowMs, deadlineMs)) {
       error = '檢查點時間須介於現在與截止日之間';
@@ -94,8 +108,8 @@
     <button type="button" class="remove-btn" onclick={handleRemove} aria-label="移除檢查點">✕</button>
   </div>
   <div class="row2">
-    <input type="date" bind:value={dateStr} onchange={commitTime} />
-    <input type="time" bind:value={timeStr} onchange={commitTime} />
+    <input type="date" bind:value={dateStr} onblur={commitTime} />
+    <input type="time" bind:value={timeStr} onblur={commitTime} />
   </div>
   {#if error}
     <p class="error">{error}</p>
@@ -114,11 +128,18 @@
   .row1,
   .row2 {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 4px;
   }
 
   .label-input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .row2 input[type='date'],
+  .row2 input[type='time'] {
     flex: 1 1 auto;
     min-width: 0;
   }

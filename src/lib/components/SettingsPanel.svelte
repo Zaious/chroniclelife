@@ -148,7 +148,7 @@
       <span class="label">視窗不透明度</span>
       <input
         type="range"
-        min="0.3"
+        min="0"
         max="1"
         step="0.05"
         value={$settings.windowOpacity}

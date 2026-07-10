@@ -57,7 +57,7 @@ export interface Settings {
   rowSpacing: RowSpacing;
   barHeightPx: number;
   fontSizePx: number;
-  /** 0.3 ~ 1.0 */
+  /** 0 ~ 1.0(0 = 容器全透明,只剩內容可見) */
   windowOpacity: number;
   theme: Theme;
   dockSide: DockSide;
